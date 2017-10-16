@@ -1,3 +1,3 @@
 interface ProgressUpdate {
-    fun printProgress(process: Double)
+    fun printProgress(progress: Double)
 }

@@ -11,7 +11,7 @@ import java.io.FileOutputStream
 
 
 
-class DownloadAgentImplTest {
+class DownloadAgentTest {
 
     @Rule
     @JvmField
@@ -22,10 +22,14 @@ class DownloadAgentImplTest {
 
     @Test
     fun downloadingFileThatWasServed() {
-        val originalBytes = DownloadAgentImpl::class.java.getResourceAsStream("picture.jpg").readBytes()
+        val originalBytes = DownloadAgent::class.java.getResourceAsStream("picture.jpg").readBytes()
         val downloadedFile = tempFolder.newFile("picture.jpg")
-        DownloadAgentImpl(DownloadAgent::class.java.getResourceAsStream("picture.jpg"),
-                FileOutputStream(downloadedFile), ProgressUpdateImpl()).downloadFile()
+        (object: DownloadAgent(){
+            override fun downloadFile(url: String, destination: String){
+                super.downloadFile(DownloadAgent::class.java.getResourceAsStream("picture.jpg"),
+                        FileOutputStream(downloadedFile))
+            }
+        }).downloadFile("", "")
         assertThat(downloadedFile.readBytes(), `is`(equalTo(originalBytes)))
     }
 
@@ -38,7 +42,14 @@ class DownloadAgentImplTest {
                 allowing(progress).printProgress(with(AbstractExpectations.any(Double::class.java)))
             }
         })
-        DownloadAgentImpl(DownloadAgentImplTest::class.java.getResourceAsStream("picture.jpg"),
-                FileOutputStream(downloadedFile), progress).downloadFile()
+        (object: DownloadAgent(){
+            override fun setupProgressUpdate() {
+                super.progress = progress
+            }
+            override fun downloadFile(url: String, destination: String){
+                super.downloadFile(DownloadAgent::class.java.getResourceAsStream("picture.jpg"),
+                        FileOutputStream(downloadedFile))
+            }
+        }).downloadFile("", "")
     }
 }
