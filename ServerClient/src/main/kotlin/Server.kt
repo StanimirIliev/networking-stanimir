@@ -1,6 +1,7 @@
 import com.google.common.util.concurrent.AbstractExecutionThreadService
 import java.io.IOException
 import java.io.PrintWriter
+import java.lang.Thread.sleep
 import java.net.PortUnreachableException
 import java.net.ServerSocket
 import java.net.Socket
@@ -13,7 +14,6 @@ open class Server(val port:Int): AbstractExecutionThreadService() {
     lateinit var serverSocket: ServerSocket
     lateinit var output: PrintWriter
     lateinit var clientSocket: Socket
-    lateinit var client: AbstractExecutionThreadService
 
     public override fun startUp() {
         try{
@@ -33,7 +33,6 @@ open class Server(val port:Int): AbstractExecutionThreadService() {
         output = PrintWriter(clientSocket.getOutputStream())
         output.print("Hello\tDate: ${LocalDate.now()}, Time: ${LocalTime.now()}")
         output.close()
-        client.awaitRunning()
     }
 
     override fun shutDown() {
@@ -46,10 +45,6 @@ open class Server(val port:Int): AbstractExecutionThreadService() {
         catch(e: IOException){
             print("[Server]\tError occurred while shutting down")
         }
-    }
-
-    fun addClient(client: Client){
-        this.client = client
     }
 
     private fun print(str: String){

@@ -24,37 +24,29 @@ class ClientTest {
                 assertThat(clientSocket.isConnected, `is`(equalTo(true)))
             }
         })
-        client.addServer(server)
-        client.startAsync()
         server.startAsync()
+        server.awaitRunning()
+        client.connect()
     }
 
     @Test
     fun readMessage() {
         val client = (object: Client("127.0.0.1", 9000){
-            override fun startUp() {
-                print("[Client]\tWaiting for server to setup")
-                server.awaitRunning()
-                socket = Socket(host, port)
-                print("[Client]\tConnected to $host:$port")
+            override fun readData() {
                 val data = InputStreamReader(socket.getInputStream()).readText()
-                assertThat(data, `is`(equalTo("Hello\tDate: ${LocalDate.now()}, Time: ${LocalTime.now()}")))
+                assertThat(data, `is`(equalTo("Hello")))
             }
         })
-        val server = (object: Server(9000){
-            override fun startUp() {
-                serverSocket = ServerSocket(port)
-            }
-
+        val server = object: Server(9000) {
             override fun run() {
                 clientSocket = serverSocket.accept()
                 output = PrintWriter(clientSocket.getOutputStream())
-                output.print("Hello\tDate: ${LocalDate.now()}, Time: ${LocalTime.now()}")
+                output.print("Hello")
                 output.close()
             }
-        })
-        client.addServer(server)
-        client.startAsync()
+        }
         server.startAsync()
+        client.connect()
+        client.readData()
     }
 }
