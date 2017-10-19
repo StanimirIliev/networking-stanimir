@@ -10,6 +10,7 @@ import org.junit.Test
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
+import java.net.ConnectException
 import java.net.Socket
 import java.nio.charset.Charset
 
@@ -31,7 +32,7 @@ class ServerTest {
 
     @Test
     fun establishConnection() {
-        val client = object : Client(defaultHost, defaultPort) {
+        val client = object : Client(defaultHost, defaultPort, ConsoleDisplay()) {
             override fun run() {
                 while (true) {
                     try {
@@ -49,7 +50,7 @@ class ServerTest {
 
     @Test
     fun establishConnectionWithManyClients() {
-        val client = object : Client(defaultHost, defaultPort) {
+        val client = object : Client(defaultHost, defaultPort, ConsoleDisplay()) {
             override fun run() {
                 while (true) {
                     try {
@@ -70,105 +71,124 @@ class ServerTest {
 
     @Test
     fun sendDataToClient() {
-        val client = object : Client(defaultHost, defaultPort) {
-            private inner class Reader(val stream: InputStream) : Runnable {
-                override fun run() {
-                    val reader = stream.bufferedReader(Charset.defaultCharset())
-                    while (true) {
-                        try {
-                            val msg = reader.readLine()
-                            assertThat(msg, `is`(equalTo("You are client #1")))
-                            return
-                        } catch (e: IOException) {
-                            e.printStackTrace()
-                            fail("Exception has been thrown")
-                        }
-                    }
-                }
-            }
-
-            override fun run() {
-                while (true) {
-                    try {
-                        val socket = Socket(host, port)
-                        Reader(socket.getInputStream()).run()
-                        break
-                    } catch (e: IOException) {
-
-                    }
+        val fakeDisplay = object : Display {
+            val content = ArrayList<String>()
+            override fun print(content: String?) {
+                if (content != null) {
+                    this.content.add(content)
                 }
             }
         }
-        client.run()
+        object : Client(defaultHost, defaultPort, fakeDisplay) {
+            private inner class Reader(val stream: InputStream) {
+                init {
+                    val reader = stream.bufferedReader(Charset.defaultCharset())
+                    try {
+                        display.print(reader.readLine())
+
+                    } catch (e: IOException) {
+                        fail("Exception has been thrown")
+                        e.printStackTrace()
+                    }
+                }
+            }
+
+            private lateinit var clientSocket: Socket
+
+            override fun run() {
+                display.print("Waiting the server to setup...")
+                while (true) {
+                    try {
+                        clientSocket = Socket(host, port)
+                        break
+                    } catch (e: ConnectException) {
+
+                    }
+                }
+                display.print("Connected to $host:$port")
+                Reader(clientSocket.getInputStream())
+            }
+        }.run()
+        assertThat(fakeDisplay.content.contains("You are client #1"), `is`(equalTo(true)))
     }
 
     @Test
     fun readDataFromClient() {
-
-        val client = object : Client(defaultHost, defaultPort) {
-            private inner class Writer(val stream: OutputStream) : Runnable {
-                override fun run() {
-                    while (true) {
-                        try {
-                            val msg = "Hello"
-                            stream.write((msg + "\n").toByteArray())
-                            stream.flush()
-                            break
-                        } catch (e: IOException) {
-                            e.printStackTrace()
-                            fail("Exception has been thrown")
-                        }
-                    }
-                }
-            }
-
-            private inner class Reader(val stream: InputStream) : Runnable {
-                override fun run() {
-                    val reader = stream.bufferedReader(Charset.defaultCharset())
-                    while (true) {
-                        try {
-                            reader.readLine()// skip the first red line
-                            assertThat(reader.readLine(), `is`(equalTo("[Client #1]: Hello")))
-                            break
-                        } catch (e: IOException) {
-                            e.printStackTrace()
-                            fail("Exception has been thrown")
-                        }
-                    }
-                }
-            }
-
-            override fun run() {
-                while (true) {
-                    try {
-                        val socket = Socket(host, port)
-                        Writer(socket.getOutputStream()).run()
-                        Reader(socket.getInputStream()).run()
-                        break
-                    } catch (e: IOException) {
-
-                    }
+        val fakeDisplay = object : Display {
+            val content = ArrayList<String>()
+            override fun print(content: String?) {
+                if (content != null) {
+                    this.content.add(content)
                 }
             }
         }
-        client.run()
+        object : Client(defaultHost, defaultPort, fakeDisplay) {
+            private inner class Reader(val stream: InputStream) {
+                init {
+                    val reader = stream.bufferedReader(Charset.defaultCharset())
+                    try {
+                        display.print(reader.readLine())
+                        display.print(reader.readLine())
+
+                    } catch (e: IOException) {
+                        fail("Exception has been thrown")
+                        e.printStackTrace()
+                    }
+                }
+            }
+
+            private inner class Writer(val stream: OutputStream) {
+                init {
+                    try {
+                        stream.write(("Hi" + "\n").toByteArray())
+                        stream.flush()
+                    } catch (e: IOException) {
+                        fail("Exception has been thrown")
+                        e.printStackTrace()
+                    }
+                }
+            }
+
+            private lateinit var clientSocket: Socket
+
+            override fun run() {
+                display.print("Waiting the server to setup...")
+                while (true) {
+                    try {
+                        clientSocket = Socket(host, port)
+                        break
+                    } catch (e: ConnectException) {
+
+                    }
+                }
+                display.print("Connected to $host:$port")
+                Writer(clientSocket.getOutputStream())
+                Reader(clientSocket.getInputStream())
+            }
+        }.run()
+        assertThat(fakeDisplay.content.contains("[Client #1]: Hi"), `is`(equalTo(true)))
     }
 
     @Test
     fun sendDataToAllClients() {
-        val client1 = object : Client(defaultHost, defaultPort) {
-            private inner class Reader(val stream: InputStream) : Runnable {
-                override fun run() {
+        val fakeDisplay = object : Display {
+            val content = ArrayList<String>()
+            override fun print(content: String?) {
+                if (content != null) {
+                    this.content.add(content)
+                }
+            }
+        }
+        val client1 = object : Client(defaultHost, defaultPort, fakeDisplay) {
+            private inner class Reader(val stream: InputStream) {
+                init {
                     val reader = stream.bufferedReader(Charset.defaultCharset())
-                    while (true) {
-                        try {
-                            val msg = reader.readLine()
-                            assertThat(msg, `is`(equalTo("You are client #1")))
-                            return
-                        } catch (e: IOException) {
-                            e.printStackTrace()
-                            fail("Exception has been thrown")
-                        }
+                    try {
+                        val msg = reader.readLine()
+                        display.print(msg)
+                    } catch (e: IOException) {
+                        fail("Exception has been thrown")
+                        e.printStackTrace()
                     }
                 }
             }
@@ -177,7 +197,7 @@ class ServerTest {
                 while (true) {
                     try {
                         val socket = Socket(host, port)
-                        Reader(socket.getInputStream()).run()
+                        Reader(socket.getInputStream())
                         break
                     } catch (e: IOException) {
 
@@ -185,19 +205,16 @@ class ServerTest {
                 }
             }
         }
-        val client2 = object : Client(defaultHost, defaultPort) {
-            private inner class Reader(val stream: InputStream) : Runnable {
-                override fun run() {
+        val client2 = object : Client(defaultHost, defaultPort, fakeDisplay) {
+            private inner class Reader(val stream: InputStream) {
+                init {
                     val reader = stream.bufferedReader(Charset.defaultCharset())
-                    while (true) {
-                        try {
-                            val msg = reader.readLine()
-                            assertThat(msg, `is`(equalTo("You are client #2")))
-                            return
-                        } catch (e: IOException) {
-                            e.printStackTrace()
-                            fail("Exception has been thrown")
-                        }
+                    try {
+                        val msg = reader.readLine()
+                        display.print(msg)//assertThat(msg, `is`(equalTo("You are client #2")))
+                    } catch (e: IOException) {
+                        fail("Exception has been thrown")
+                        e.printStackTrace()
                     }
                 }
             }
@@ -206,7 +223,7 @@ class ServerTest {
                 while (true) {
                     try {
                         val socket = Socket(host, port)
-                        Reader(socket.getInputStream()).run()
+                        Reader(socket.getInputStream())
                         break
                     } catch (e: IOException) {
 
@@ -216,5 +233,7 @@ class ServerTest {
         }
         client1.run()
         client2.run()
+        assertThat(fakeDisplay.content.contains("You are client #1"), `is`(equalTo(true)))
+        assertThat(fakeDisplay.content.contains("You are client #2"), `is`(equalTo(true)))
     }
 }
